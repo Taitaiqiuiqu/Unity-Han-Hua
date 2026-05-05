@@ -9,6 +9,7 @@ public class MainForm : Form
 {
     private AppConfig _appConfig;
     private PluginDeployer? _pluginDeployer;
+    private TranslationProxy? _translationProxy;
 
     private TabControl _tabControl = null!;
     private TabPage _tabMod = null!;
@@ -203,7 +204,7 @@ public class MainForm : Form
         y += dy + 90;
         var hint = new Label
         {
-            Text = "DeepSeek API 申请: https://platform.deepseek.com/api_keys\n\n翻译流程: XUnity Hook 游戏文本 → DeepSeekTranslate 直接调用 DeepSeek API\n无需本地代理，API Key 写入游戏配置，启动即翻译。",
+            Text = "DeepSeek API 申请: https://platform.deepseek.com/api_keys\n\n翻译流程: XUnity Hook 游戏文本 → 127.0.0.1:5588 本地代理 → DeepSeek API\n代理中转：实时监控每条翻译、统计成功/失败、记录错误日志。",
             Location = new Point(leftX, y),
             Size = new Size(510, 120),
             Font = new Font("Microsoft YaHei UI", 8.5f),
@@ -429,10 +430,43 @@ public class MainForm : Form
         ConsoleUtils.WriteInfo($"已选择: {_selectedExePath}");
         ConsoleUtils.WriteLine();
 
+        _translationProxy = new TranslationProxy(_appConfig.DeepSeekApiKey, _appConfig.GetModelName());
+        _translationProxy.OnTranslation += OnProxyTranslation;
+        _translationProxy.OnStatisticsChanged += OnProxyStatsChanged;
+
+        if (!_translationProxy.Start())
+        {
+            ConsoleUtils.WriteError("翻译代理启动失败（端口 5588 可能被占用）");
+            ConsoleUtils.WriteError("请关闭占用该端口的程序后重试");
+            _translationProxy = null;
+            _promptLabel.ForeColor = Color.FromArgb(200, 50, 50);
+            _promptLabel.Text = "翻译代理启动失败，请检查端口 5588";
+            ResetToIdle();
+            return;
+        }
+
+        await Task.Delay(300);
+        var proxyOk = await CheckProxyHealthAsync();
+        if (!proxyOk)
+        {
+            ConsoleUtils.WriteError("翻译代理健康检查失败（HTTP GET /health 无响应）");
+            ConsoleUtils.WriteError("请检查 5588 端口是否被防火墙拦截");
+            _translationProxy.Dispose();
+            _translationProxy = null;
+            _promptLabel.ForeColor = Color.FromArgb(200, 50, 50);
+            _promptLabel.Text = "代理健康检查失败，请检查 5588 端口是否被防火墙拦截";
+            ResetToIdle();
+            return;
+        }
+        ConsoleUtils.WriteSuccess("翻译代理已启动并验证通过 (127.0.0.1:5588)");
+        ConsoleUtils.WriteLine();
+
         var deployed = await Task.Run(() => DetectAndDeploy(_selectedExePath));
         if (!deployed)
         {
             ConsoleUtils.WriteError("部署失败，请检查日志获取详细信息。");
+            _translationProxy?.Dispose();
+            _translationProxy = null;
             _promptLabel.ForeColor = Color.FromArgb(200, 50, 50);
             _promptLabel.Text = "部署失败，请检查日志。";
             _btnRetry.Visible = true;
@@ -450,6 +484,8 @@ public class MainForm : Form
         if (!launched)
         {
             ConsoleUtils.WriteError("游戏启动失败，请检查游戏路径。");
+            _translationProxy?.Dispose();
+            _translationProxy = null;
             _promptLabel.ForeColor = Color.FromArgb(200, 50, 50);
             _promptLabel.Text = "游戏启动失败，请重试。";
             _btnRetry.Visible = true;
@@ -457,13 +493,31 @@ public class MainForm : Form
             return;
         }
 
-        ConsoleUtils.WriteSuccess("部署完成！游戏已启动，翻译由 DeepSeek AI 自动处理。");
-        ConsoleUtils.WriteInfo("提示：进入游戏后稍等片刻，文本将自动翻译为中文。");
+        ConsoleUtils.WriteSuccess("部署完成！游戏已启动，翻译代理运行中...");
+        ConsoleUtils.WriteInfo("翻译实时监控: 游戏文本 → 127.0.0.1:5588 → DeepSeek API → 中文");
         ConsoleUtils.WriteInfo("请勿删除游戏目录下的 BepInEx 文件夹。");
+        ConsoleUtils.WriteLine();
 
-        _promptLabel.ForeColor = Color.FromArgb(46, 125, 50);
-        _promptLabel.Text = "部署完成！游戏已启动，翻译由 DeepSeek AI 自动处理。";
-        ResetToIdle();
+        var healthOk = await CheckProxyHealthAsync();
+        if (healthOk)
+        {
+            ConsoleUtils.WriteSuccess("代理健康检查通过");
+            _promptLabel.ForeColor = Color.FromArgb(46, 125, 50);
+            _promptLabel.Text = "✅ 翻译代理运行中 | 127.0.0.1:5588 | 实时监控翻译状态...";
+        }
+        else
+        {
+            ConsoleUtils.WriteError("⚠ 代理健康检查失败！翻译将无法工作");
+            ConsoleUtils.WriteError("请检查 5588 端口是否被防火墙拦截，然后重试");
+            _promptLabel.ForeColor = Color.FromArgb(200, 50, 50);
+            _promptLabel.Text = "❌ 代理异常！5588 端口无响应，翻译将无法工作";
+        }
+        _btnMod.Enabled = false;
+        _btnMod.Visible = false;
+        _btnRetry.Text = "⏹ 停止翻译代理";
+        _btnRetry.BackColor = Color.FromArgb(244, 67, 54);
+        _btnRetry.Visible = true;
+        _isWorking = true;
     }
 
     private bool DetectAndDeploy(string exePath)
@@ -491,8 +545,6 @@ public class MainForm : Form
             ConsoleUtils.WriteWarning("检测到已安装 BepInEx，仅部署翻译组件");
             ConsoleUtils.WriteInfo($"正在部署 XUnity.AutoTranslator ({_pluginDeployer.CurrentVersion})...");
             _pluginDeployer.DeployXUnityOnly(gameInfo.GameRoot, gameInfo.Type, _pluginDeployer.CurrentVersion);
-            ConsoleUtils.WriteInfo("正在部署 DeepSeekTranslate 端点...");
-            _pluginDeployer.DeployDeepSeekTranslate(gameInfo.GameRoot);
             ConsoleUtils.WriteInfo("正在部署 TMP 中文字体...");
             _pluginDeployer.DeployTmpFontAsset(gameInfo.GameRoot);
             ConsoleUtils.WriteLine();
@@ -500,7 +552,7 @@ public class MainForm : Form
         else
         {
             ConsoleUtils.WriteLine();
-            ConsoleUtils.WriteInfo($"正在部署 BepInEx + XUnity.AutoTranslator ({_pluginDeployer.CurrentVersion}) + DeepSeekTranslate...");
+            ConsoleUtils.WriteInfo($"正在部署 BepInEx + XUnity.AutoTranslator ({_pluginDeployer.CurrentVersion})...");
 
             var result = _pluginDeployer.Deploy(gameInfo, _pluginDeployer.CurrentVersion, false);
 
@@ -518,8 +570,8 @@ public class MainForm : Form
         configGen.GenerateConfigs(gameInfo.GameRoot, gameInfo);
 
         ConsoleUtils.WriteInfo($"翻译模型: {_appConfig.GetModelName()}");
-        ConsoleUtils.WriteInfo($"XUnity 版本: {_pluginDeployer.CurrentVersion}");
-        ConsoleUtils.WriteInfo($"翻译端点: DeepSeek API (内嵌)");
+        ConsoleUtils.WriteLine();
+        ConsoleUtils.WriteInfo($"翻译端点: 本地代理 (127.0.0.1:5588 → DeepSeek API)");
 
         // IL2CPP 游戏使用 BepInEx 6，日志文件为 .txt；Mono 游戏使用 BepInEx 5，日志文件为 .log
         var logFileName = gameInfo.Type == GameType.IL2CPP ? "LogOutput.txt" : "LogOutput.log";
@@ -558,12 +610,68 @@ public class MainForm : Form
 
     private void OnRetryClick(object? sender, EventArgs e)
     {
+        if (_translationProxy != null)
+        {
+            ConsoleUtils.WriteInfo("正在停止翻译代理...");
+            _translationProxy.Dispose();
+            _translationProxy = null;
+            ConsoleUtils.WriteSuccess("翻译代理已停止");
+        }
+
         _btnRetry.Visible = false;
         _btnMod.Enabled = true;
         _btnMod.Visible = true;
         _isWorking = false;
         _promptLabel.ForeColor = Color.FromArgb(0, 120, 212);
-        _promptLabel.Text = "请重试。如持续失败请检查：① 网络连接 ② API Key ③ 关闭杀毒软件。";
+        _promptLabel.Text = "欢迎使用 trantion！DeepSeek AI 驱动翻译。\n①【配置】页填写 API Key → ② 点击下方按钮 → ③ 选游戏 exe → ④ 自动完成";
+    }
+
+    private void OnProxyTranslation(string sourceText, string translatedText, string? error)
+    {
+        if (InvokeRequired)
+        {
+            Invoke(() => OnProxyTranslation(sourceText, translatedText, error));
+            return;
+        }
+
+        var preview = sourceText.Length > 40 ? sourceText[..40] + "..." : sourceText;
+        if (error != null)
+        {
+            ConsoleUtils.WriteError($"翻译失败: {preview} | {error}");
+        }
+        else
+        {
+            var resultPreview = translatedText.Length > 30 ? translatedText[..30] + "..." : translatedText;
+            ConsoleUtils.WriteSuccess($"翻译: {preview} → {resultPreview}");
+        }
+    }
+
+    private void OnProxyStatsChanged(int total, int success, int fail)
+    {
+        if (InvokeRequired)
+        {
+            Invoke(() => OnProxyStatsChanged(total, success, fail));
+            return;
+        }
+
+        _promptLabel.ForeColor = Color.FromArgb(0, 120, 212);
+        _promptLabel.Text = $"🌐 翻译代理运行中 | 127.0.0.1:5588 | 总计: {total} | ✅ {success} | ❌ {fail}";
+    }
+
+    private static async Task<bool> CheckProxyHealthAsync()
+    {
+        try
+        {
+            using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+            var response = await httpClient.GetAsync("http://127.0.0.1:5588/health");
+            if (!response.IsSuccessStatusCode) return false;
+            var body = await response.Content.ReadAsStringAsync();
+            return body == "OK";
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     protected override void Dispose(bool disposing)
@@ -571,6 +679,7 @@ public class MainForm : Form
         if (disposing)
         {
             ConsoleUtils.OnLog -= OnLogMessage;
+            _translationProxy?.Dispose();
         }
         base.Dispose(disposing);
     }

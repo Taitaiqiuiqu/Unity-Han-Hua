@@ -11,7 +11,7 @@
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <AssemblyName>trantion</AssemblyName>
     <RootNamespace>OneClickChineseMod</RootNamespace>
-    <UseWindowsForms>true</UseWindowsForms>
+    <UseWPF>true</UseWPF>
   </PropertyGroup>
 
   <ItemGroup>
@@ -29,6 +29,16 @@
     <EmbeddedResource Include="Resources\XUnity.AutoTranslator-BepInEx-5.6.1.zip" />
     <EmbeddedResource Include="Resources\XUnity.AutoTranslator-BepInEx-IL2CPP-5.6.1.zip" />
     <EmbeddedResource Include="Resources\DeepSeekTranslate.dll" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Resources\Themes\Colors.xaml" />
+    <Resource Include="Resources\Themes\Typography.xaml" />
+    <Resource Include="Resources\Styles\ButtonStyles.xaml" />
+    <Resource Include="Resources\Styles\InputStyles.xaml" />
+    <Resource Include="Resources\Styles\CardStyles.xaml" />
+    <Resource Include="Resources\Styles\TabStyles.xaml" />
+    <Resource Include="Resources\Icons\VectorIcons.xaml" />
   </ItemGroup>
 
 </Project>

@@ -25,6 +25,9 @@ public class TranslationProxy : IDisposable
     public int FailCount { get; private set; }
     public string LastError { get; private set; } = string.Empty;
 
+    public event Action<string, string, string?>? OnTranslation;
+    public event Action<int, int, int>? OnStatisticsChanged;
+
     public TranslationProxy(string apiKey, string model, int port = DEFAULT_PORT)
     {
         _apiKey = apiKey;
@@ -88,51 +91,33 @@ public class TranslationProxy : IDisposable
                 var httpMethod = parts[0];
                 var url = parts[1];
 
+                int contentLength = 0;
+                string contentType = "";
                 while (true)
                 {
                     var line = await reader.ReadLineAsync(ct);
                     if (string.IsNullOrEmpty(line) || line == "\r") break;
+                    if (line.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase))
+                        contentLength = int.Parse(line.Substring("Content-Length:".Length).Trim());
+                    if (line.StartsWith("Content-Type:", StringComparison.OrdinalIgnoreCase))
+                        contentType = line.Substring("Content-Type:".Length).Trim();
                 }
 
-                if (httpMethod != "GET")
+                if (httpMethod == "GET" && (url == "/health" || url == "/healthz"))
                 {
-                    await WriteHttpResponse(stream, 405, "Method Not Allowed", "");
-                    return;
+                    await WriteHttpResponse(stream, 200, "OK", "OK");
                 }
-
-                int queryStart = url.IndexOf('?');
-                if (queryStart < 0 || queryStart >= url.Length - 1)
+                else if (httpMethod == "POST")
                 {
-                    await WriteHttpResponse(stream, 400, "Bad Request", "");
-                    return;
+                    await HandlePostRequest(stream, reader, url, contentLength, contentType, ct);
                 }
-
-                var query = url[(queryStart + 1)..];
-                var text = GetQueryParam(query, "text") ?? GetQueryParam(query, "q") ?? "";
-
-                if (string.IsNullOrWhiteSpace(text))
+                else if (httpMethod == "GET")
                 {
-                    await WriteHttpResponse(stream, 400, "Bad Request", "");
-                    return;
-                }
-
-                var sourceLang = GetQueryParam(query, "from") ?? GetQueryParam(query, "source") ?? "ja";
-                var targetLang = GetQueryParam(query, "to") ?? GetQueryParam(query, "target") ?? "zh";
-
-                TotalRequests++;
-                ConsoleUtils.WriteDebug($"翻译请求 [{TotalRequests}]: {text.Substring(0, Math.Min(text.Length, 40))}...");
-
-                var result = await TranslateWithDeepSeek(text, sourceLang, targetLang, ct);
-
-                if (result != null)
-                {
-                    SuccessCount++;
-                    await WriteHttpResponse(stream, 200, "OK", result);
+                    await HandleGetRequest(stream, url, ct);
                 }
                 else
                 {
-                    FailCount++;
-                    await WriteHttpResponse(stream, 500, "Internal Server Error", "");
+                    await WriteHttpResponse(stream, 405, "Method Not Allowed", "");
                 }
             }
         }
@@ -141,6 +126,205 @@ public class TranslationProxy : IDisposable
         catch (Exception ex)
         {
             ConsoleUtils.WriteDebug($"代理处理异常: {ex.Message}");
+        }
+    }
+
+    private async Task HandlePostRequest(NetworkStream stream, StreamReader reader, string url, int contentLength, string contentType, CancellationToken ct)
+    {
+        if (!url.StartsWith("/translate"))
+        {
+            ConsoleUtils.WriteDebug($"未知路由 POST {url} → 404");
+            FailCount++;
+            OnStatisticsChanged?.Invoke(TotalRequests, SuccessCount, FailCount);
+            await WriteHttpResponse(stream, 404, "Not Found", "");
+            return;
+        }
+
+        if (contentLength <= 0 || contentLength > 256 * 1024)
+        {
+            await WriteHttpResponse(stream, 400, "Bad Request", "");
+            return;
+        }
+
+        var bodyBuffer = new char[contentLength];
+        await reader.ReadBlockAsync(bodyBuffer, 0, contentLength);
+        var body = new string(bodyBuffer);
+
+        var sourceText = ExtractSourceText(body, contentType);
+
+        if (string.IsNullOrWhiteSpace(sourceText))
+        {
+            ConsoleUtils.WriteDebug($"无法从请求体提取文本 ({contentLength}B, Content-Type={contentType}): {body[..Math.Min(body.Length, 200)]}");
+            FailCount++;
+            OnTranslation?.Invoke("", "", "请求体无法解析");
+            OnStatisticsChanged?.Invoke(TotalRequests, SuccessCount, FailCount);
+            await WriteHttpResponse(stream, 400, "Bad Request", "");
+            return;
+        }
+
+        TotalRequests++;
+        var preview = sourceText.Length > 50 ? sourceText[..50] + "..." : sourceText;
+        ConsoleUtils.WriteDebug($"翻译请求 [{TotalRequests}]: {preview}");
+
+        try
+        {
+            using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
+
+            var payload = new
+            {
+                model = _model,
+                messages = new[]
+                {
+                    new { role = "system", content = "You are a professional translator. Translate the following text to Chinese. Return ONLY the translated text, no explanations, no notes, no quotation marks. Keep all special characters, newlines, and formatting exactly as they appear in the original." },
+                    new { role = "user", content = sourceText }
+                },
+                temperature = 0.3,
+                max_tokens = 4096
+            };
+
+            var jsonBody = JsonSerializer.Serialize(payload);
+            var request = new HttpRequestMessage(HttpMethod.Post, DEEPSEEK_URL);
+            request.Headers.Add("Authorization", $"Bearer {_apiKey}");
+            request.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+
+            var response = await httpClient.SendAsync(request, ct);
+            var responseBody = await response.Content.ReadAsStringAsync();
+
+            if (response.IsSuccessStatusCode)
+            {
+                SuccessCount++;
+                string translatedText = "";
+                try
+                {
+                    using var doc = JsonDocument.Parse(responseBody);
+                    translatedText = doc.RootElement
+                        .GetProperty("choices")[0]
+                        .GetProperty("message")
+                        .GetProperty("content")
+                        .GetString() ?? "";
+                    translatedText = translatedText.Trim();
+                }
+                catch { }
+
+                if (string.IsNullOrEmpty(translatedText))
+                {
+                    translatedText = sourceText;
+                }
+
+                OnTranslation?.Invoke(sourceText, translatedText, null);
+                OnStatisticsChanged?.Invoke(TotalRequests, SuccessCount, FailCount);
+                await WriteHttpResponse(stream, 200, "OK", translatedText);
+            }
+            else
+            {
+                FailCount++;
+                var statusCode = (int)response.StatusCode;
+                LastError = $"DeepSeek API {statusCode}";
+                ConsoleUtils.WriteError($"DeepSeek API 错误 ({statusCode}): {responseBody[..Math.Min(responseBody.Length, 300)]}");
+                OnTranslation?.Invoke(sourceText, "", LastError);
+                OnStatisticsChanged?.Invoke(TotalRequests, SuccessCount, FailCount);
+                await WriteHttpResponse(stream, statusCode, "Error", "");
+            }
+        }
+        catch (Exception ex)
+        {
+            FailCount++;
+            LastError = ex.Message;
+            ConsoleUtils.WriteError($"代理转发异常: {ex.Message}");
+            OnTranslation?.Invoke(sourceText, "", ex.Message);
+            OnStatisticsChanged?.Invoke(TotalRequests, SuccessCount, FailCount);
+            await WriteHttpResponse(stream, 500, "Proxy Error", "");
+        }
+    }
+
+    private static string ExtractSourceText(string body, string contentType)
+    {
+        bool isJson = contentType.Contains("json", StringComparison.OrdinalIgnoreCase) || body.StartsWith("{");
+        bool isFormUrlEncoded = contentType.Contains("x-www-form-urlencoded", StringComparison.OrdinalIgnoreCase);
+
+        if (isJson)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(body);
+                var root = doc.RootElement;
+
+                if (root.TryGetProperty("text", out var textProp))
+                    return textProp.GetString() ?? "";
+
+                if (root.TryGetProperty("content", out var contentProp))
+                    return contentProp.GetString() ?? "";
+
+                if (root.TryGetProperty("messages", out var messages))
+                {
+                    foreach (var msg in messages.EnumerateArray())
+                    {
+                        if (msg.TryGetProperty("role", out var role) && role.GetString() == "user")
+                            return msg.GetProperty("content").GetString() ?? "";
+                    }
+                }
+            }
+            catch { }
+            return "";
+        }
+
+        if (isFormUrlEncoded || (body.Contains("&") && body.Contains("=")))
+        {
+            foreach (var pair in body.Split('&'))
+            {
+                var eq = pair.IndexOf('=');
+                if (eq < 0) continue;
+                var key = Uri.UnescapeDataString(pair[..eq]);
+                if (key.Equals("text", StringComparison.OrdinalIgnoreCase) ||
+                    key.Equals("q", StringComparison.OrdinalIgnoreCase))
+                {
+                    return Uri.UnescapeDataString(pair[(eq + 1)..]);
+                }
+            }
+        }
+
+        return body.Trim();
+    }
+
+    private async Task HandleGetRequest(NetworkStream stream, string url, CancellationToken ct)
+    {
+        int queryStart = url.IndexOf('?');
+        if (queryStart < 0 || queryStart >= url.Length - 1)
+        {
+            await WriteHttpResponse(stream, 400, "Bad Request", "");
+            return;
+        }
+
+        var query = url[(queryStart + 1)..];
+        var text = GetQueryParam(query, "text") ?? GetQueryParam(query, "q") ?? "";
+
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            await WriteHttpResponse(stream, 400, "Bad Request", "");
+            return;
+        }
+
+        var sourceLang = GetQueryParam(query, "from") ?? GetQueryParam(query, "source") ?? "ja";
+        var targetLang = GetQueryParam(query, "to") ?? GetQueryParam(query, "target") ?? "zh";
+
+        TotalRequests++;
+        ConsoleUtils.WriteDebug($"翻译请求 [{TotalRequests}]: {text.Substring(0, Math.Min(text.Length, 40))}...");
+
+        var result = await TranslateWithDeepSeek(text, sourceLang, targetLang, ct);
+
+        if (result != null)
+        {
+            SuccessCount++;
+            OnTranslation?.Invoke(text, result, null);
+            OnStatisticsChanged?.Invoke(TotalRequests, SuccessCount, FailCount);
+            await WriteHttpResponse(stream, 200, "OK", result);
+        }
+        else
+        {
+            FailCount++;
+            OnTranslation?.Invoke(text, "", LastError);
+            OnStatisticsChanged?.Invoke(TotalRequests, SuccessCount, FailCount);
+            await WriteHttpResponse(stream, 500, "Proxy Error", "");
         }
     }
 

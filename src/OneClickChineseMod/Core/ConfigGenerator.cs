@@ -33,13 +33,6 @@ public class ConfigGenerator
 
         var configPath = Path.Combine(configDir, "AutoTranslatorConfig.ini");
 
-        // 如果配置文件已存在，保留它（避免覆盖用户的自定义配置）
-        if (File.Exists(configPath))
-        {
-            ConsoleUtils.WriteDebug("AutoTranslatorConfig.ini 已存在，保留现有配置");
-            return;
-        }
-
         var configContent = GenerateConfigContent();
         File.WriteAllText(configPath, configContent, Encoding.UTF8);
     }
@@ -81,10 +74,14 @@ public class ConfigGenerator
         var sb = new StringBuilder();
 
         sb.AppendLine("[Service]");
-        sb.AppendLine("Endpoint=DeepSeekTranslate");
+        sb.AppendLine("Endpoint=CustomTranslate");
         sb.AppendLine("FallbackEndpoint=");
         sb.AppendLine();
-
+        sb.AppendLine("[Custom]");
+        sb.AppendLine("Url=http://127.0.0.1:5588/translate");
+        sb.AppendLine("EnableShortDelay=False");
+        sb.AppendLine("DisableSpamChecks=False");
+        sb.AppendLine();
         sb.AppendLine("[General]");
         sb.AppendLine("Language=zh");
         sb.AppendLine("FromLanguage=en");
@@ -125,32 +122,6 @@ public class ConfigGenerator
         sb.AppendLine("OverrideFontName=Microsoft YaHei");
         sb.AppendLine("OverrideFontTextMeshPro=ArialUnicodeSDF");
         sb.AppendLine();
-
-        sb.AppendLine("[BaiduTranslate]");
-        sb.AppendLine("Enabled=False");
-        sb.AppendLine();
-
-        sb.AppendLine("[GoogleTranslate]");
-        sb.AppendLine("Enabled=False");
-        sb.AppendLine();
-
-        sb.AppendLine("[DeepSeek]");
-        sb.AppendLine("Endpoint=https://api.deepseek.com/chat/completions");
-        sb.AppendLine($"ApiKey={_appConfig.DeepSeekApiKey}");
-        sb.AppendLine($"Model={_appConfig.GetModelName()}");
-        sb.AppendLine("Temperature=1.3");
-        sb.AppendLine("MaxTokensMode=Dynamic");
-        sb.AppendLine("DynamicMaxTokensMultiplier=1.5");
-        sb.AppendLine("AddEndingAssistantPrompt=True");
-        sb.AppendLine("SplitByLine=False");
-        sb.AppendLine("MaxConcurrency=1");
-        sb.AppendLine("BatchTranslate=False");
-        sb.AppendLine("MaxTranslationsPerRequest=1");
-        sb.AppendLine("CoroutineWaitCountBeforeRead=150");
-        sb.AppendLine("MaxRetries=1");
-        sb.AppendLine("UseThreadPool=True");
-        sb.AppendLine("DisableThinking=True");
-        sb.AppendLine("Debug=True");
 
         return sb.ToString();
     }

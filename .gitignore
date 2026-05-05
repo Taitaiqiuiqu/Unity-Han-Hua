@@ -1,5 +1,12 @@
 bin/
 obj/
-Resources/*.zip
-Resources/*.dll
-Resources/*.md
+publish/
+trantion.exe
+trantion.pdb
+*.zip
+*.dll
+*.md
+*.exe
+*.pdb
+docs/
+src/OneClickChineseMod/Resources/Themes/
