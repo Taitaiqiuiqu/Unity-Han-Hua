@@ -1,3 +1,4 @@
+using System.IO;
 using OneClickChineseMod.Core;
 using OneClickChineseMod.Models;
 using OneClickChineseMod.Utils;
@@ -123,38 +124,29 @@ public class InstallCommand
     {
         ConsoleUtils.WriteInfo("=== 安装验证 ===");
 
-        var checks = gameType == GameType.IL2CPP
-            ? new (string, string)[]
-            {
-                ("BepInEx 目录", Path.Combine(gameRoot, "BepInEx")),
-                ("BepInEx 核心", Path.Combine(gameRoot, "BepInEx", "core", "BepInEx.dll")),
-                ("BepInEx 插件目录", Path.Combine(gameRoot, "BepInEx", "plugins")),
-                ("Doorstop 配置", Path.Combine(gameRoot, "doorstop_config.ini")),
-                ("AutoTranslator 配置", Path.Combine(gameRoot, "BepInEx", "config", "AutoTranslatorConfig.ini")),
-            }
-            : new (string, string)[]
-            {
-                ("BepInEx 目录", Path.Combine(gameRoot, "BepInEx")),
-                ("BepInEx 核心", Path.Combine(gameRoot, "BepInEx", "core", "BepInEx.dll")),
-                ("BepInEx 插件目录", Path.Combine(gameRoot, "BepInEx", "plugins")),
-                ("winhttp.dll 入口", Path.Combine(gameRoot, "winhttp.dll")),
-                ("AutoTranslator 配置", Path.Combine(gameRoot, "BepInEx", "config", "AutoTranslatorConfig.ini")),
-            };
+        var deployer = new PluginDeployer();
+        bool baseValid = deployer.ValidateInstallation(gameRoot, gameType);
 
-        var allOk = true;
-        foreach (var (name, path) in checks)
+        var baseCheckName = gameType == GameType.IL2CPP
+            ? "BepInEx IL2CPP 核心文件"
+            : "BepInEx Mono 核心文件";
+        ConsoleUtils.WriteDebug($"  {(baseValid ? "✅" : "❌")} {baseCheckName}");
+
+        var extraChecks = new (string Name, string Path)[]
+        {
+            ("BepInEx 目录", Path.Combine(gameRoot, "BepInEx")),
+            ("AutoTranslator 配置", Path.Combine(gameRoot, "BepInEx", "config", "AutoTranslatorConfig.ini")),
+        };
+
+        bool extraValid = true;
+        foreach (var (name, path) in extraChecks)
         {
             bool exists = File.Exists(path) || Directory.Exists(path);
-            if (exists)
-                ConsoleUtils.WriteDebug($"  ✅ {name}: {path}");
-            else
-            {
-                ConsoleUtils.WriteError($"  ❌ {name}: 未找到");
-                allOk = false;
-            }
+            ConsoleUtils.WriteDebug($"  {(exists ? "✅" : "❌")} {name}");
+            if (!exists) extraValid = false;
         }
 
-        if (allOk)
+        if (baseValid && extraValid)
         {
             ConsoleUtils.WriteSuccess("所有关键文件已就位");
         }
@@ -174,7 +166,7 @@ public class InstallCommand
             launchChoice.Equals("y", StringComparison.OrdinalIgnoreCase) ||
             launchChoice.Equals("yes", StringComparison.OrdinalIgnoreCase))
         {
-            _gameLauncher.LaunchGame(gameInfo.GameRoot, gameInfo.GameName + ".exe");
+            _gameLauncher.LaunchGame(gameInfo);
         }
         else
         {
@@ -197,6 +189,14 @@ public class InstallCommand
             ConsoleUtils.WriteInfo($"Unity 版本: {gameInfo.UnityVersion}");
         }
 
+        if (gameInfo.IsSteamGame)
+        {
+            var steamInfo = string.IsNullOrWhiteSpace(gameInfo.SteamAppId)
+                ? "检测到 SteamAPI (未找到 AppID)"
+                : $"检测到 SteamAPI (AppID: {gameInfo.SteamAppId})";
+            ConsoleUtils.WriteInfo(steamInfo);
+        }
+
         if (gameInfo.IsBepInExInstalled)
         {
             ConsoleUtils.WriteWarning($"BepInEx 已安装 (版本: {gameInfo.InstalledBepInExVersion})");
@@ -209,9 +209,9 @@ public class InstallCommand
 
     private void ShowHelp()
     {
-        Console.WriteLine("OneClickChineseMod - 一键汉化工具");
+        Console.WriteLine($"{AppBasicInfoManager.AppDisplayName} - {AppBasicInfoManager.CliDescription}");
         Console.WriteLine();
-        Console.WriteLine("用法: OneClickChineseMod.exe install <game.exe> [选项]");
+        Console.WriteLine(AppBasicInfoManager.CliUsage);
         Console.WriteLine();
         Console.WriteLine("选项:");
         Console.WriteLine("  --force, -f        强制覆盖已安装的插件");

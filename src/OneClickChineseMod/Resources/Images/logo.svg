@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" width="1000" height="1000">
+  <defs>
+    <!-- 霓虹发光滤镜 -->
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- 黑色背景 -->
+  <rect width="1000" height="1000" fill="#000000"/>
+
+  <!-- Logo图形组 - 居中 -->
+  <g transform="translate(500, 420)" filter="url(#glow)">
+    <!-- 正六边形外框 - 科技电路板风格 -->
+    <!-- 六边形顶点计算：中心(0,0)，半径280 -->
+    <path d="M0 -280 L242.5 -140 L242.5 140 L0 280 L-242.5 140 L-242.5 -140 Z" 
+          fill="none" stroke="#00e0ff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+    
+    <!-- 内部S形电路 -->
+    <!-- 上半部分S -->
+    <path d="M0 -180 L-100 -120 L-100 -40 L0 20 L100 80 L100 160 L0 220" 
+          fill="none" stroke="#00e0ff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+    <!-- 下半部分S的另一半 -->
+    <path d="M0 20 L100 -40 L100 -120 L0 -180" 
+          fill="none" stroke="#00e0ff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M0 220 L-100 160 L-100 80 L0 20" 
+          fill="none" stroke="#00e0ff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <!-- 左上圆形节点 -->
+    <circle cx="-180" cy="-220" r="7.5" fill="none" stroke="#00e0ff" stroke-width="8"/>
+    <!-- 连接线到六边形 -->
+    <line x1="-180" y1="-212.5" x2="-180" y2="-180" stroke="#00e0ff" stroke-width="8" stroke-linecap="round"/>
+
+    <!-- 右下圆形节点 -->
+    <circle cx="180" cy="220" r="7.5" fill="none" stroke="#00e0ff" stroke-width="8"/>
+    <!-- 连接线到六边形 -->
+    <line x1="180" y1="212.5" x2="180" y2="180" stroke="#00e0ff" stroke-width="8" stroke-linecap="round"/>
+
+    <!-- 左侧三条平行短线 -->
+    <line x1="-280" y1="-60" x2="-320" y2="-60" stroke="#00e0ff" stroke-width="8" stroke-linecap="round"/>
+    <line x1="-280" y1="0" x2="-320" y2="0" stroke="#00e0ff" stroke-width="8" stroke-linecap="round"/>
+    <line x1="-280" y1="60" x2="-320" y2="60" stroke="#00e0ff" stroke-width="8" stroke-linecap="round"/>
+
+    <!-- 右侧三条平行短线 -->
+    <line x1="280" y1="-60" x2="320" y2="-60" stroke="#00e0ff" stroke-width="8" stroke-linecap="round"/>
+    <line x1="280" y1="0" x2="320" y2="0" stroke="#00e0ff" stroke-width="8" stroke-linecap="round"/>
+    <line x1="280" y1="60" x2="320" y2="60" stroke="#00e0ff" stroke-width="8" stroke-linecap="round"/>
+  </g>
+
+  <!-- 文字 - 张先森汉化工具 -->
+  <!-- 位置：图形正下方，间距约为图形高度的10% (约56px) -->
+  <text x="500" y="780" 
+        font-family="SimHei, Microsoft YaHei, sans-serif" 
+        font-size="120" 
+        font-weight="bold" 
+        fill="#00e0ff" 
+        text-anchor="middle"
+        filter="url(#glow)">张先森汉化工具</text>
+</svg>

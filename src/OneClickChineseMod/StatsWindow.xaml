@@ -1,0 +1,137 @@
+<Window x:Class="OneClickChineseMod.StatsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:OneClickChineseMod"
+        Title="翻译统计报告"
+        Width="420"
+        Height="420"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        Topmost="True">
+
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Resources/Themes/Colors.xaml"/>
+                <ResourceDictionary Source="Resources/Styles/CardStyles.xaml"/>
+                <ResourceDictionary Source="Resources/Styles/ButtonStyles.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <Border Background="{StaticResource SecondaryBlackBrush}"
+            BorderBrush="{StaticResource ElectricCyanBrush}"
+            BorderThickness="1"
+            CornerRadius="12"
+            Padding="0">
+        <Grid Margin="28,24">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <StackPanel Grid.Row="0">
+                <TextBlock Text="📊 翻译统计报告"
+                           FontSize="20" FontWeight="Bold"
+                           Foreground="{StaticResource PrimaryTextBrush}"/>
+                <Border Height="1" Background="{StaticResource BorderDimBrush}" Margin="0,12,0,0"/>
+            </StackPanel>
+
+            <StackPanel Grid.Row="1" Margin="0,16,0,0">
+
+                <Grid Margin="0,0,0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="XUnity 钩取词条数"
+                               Foreground="{StaticResource SecondaryTextBrush}"
+                               FontSize="14" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="1" x:Name="StatTotalRequests"
+                               Text="0" FontSize="22" FontWeight="Bold"
+                               Foreground="{StaticResource PrimaryTextBrush}"/>
+                </Grid>
+
+                <Grid Margin="0,0,0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="成功翻译数"
+                               Foreground="{StaticResource SecondaryTextBrush}"
+                               FontSize="14" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="1" x:Name="StatSuccessCount"
+                               Text="0" FontSize="22" FontWeight="Bold"
+                               Foreground="{StaticResource ElectricCyanBrush}"/>
+                </Grid>
+
+                <Grid Margin="0,0,0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="翻译失败数"
+                               Foreground="{StaticResource SecondaryTextBrush}"
+                               FontSize="14" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="1" x:Name="StatFailCount"
+                               Text="0" FontSize="22" FontWeight="Bold"
+                               Foreground="{StaticResource ErrorBrush}"/>
+                </Grid>
+
+                <Grid Margin="0,0,0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="缓存命中数"
+                               Foreground="{StaticResource SecondaryTextBrush}"
+                               FontSize="14" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="1" x:Name="StatCacheHits"
+                               Text="0" FontSize="22" FontWeight="Bold"
+                               Foreground="{StaticResource ElectricCyanBrush}"/>
+                </Grid>
+
+                <Border Height="1" Background="{StaticResource BorderDimBrush}" Margin="0,4,0,12"/>
+
+                <Grid Margin="0,0,0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="平均翻译延迟"
+                               Foreground="{StaticResource SecondaryTextBrush}"
+                               FontSize="14" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="1" x:Name="StatAvgLatency"
+                               Text="0 ms" FontSize="22" FontWeight="Bold"
+                               Foreground="{StaticResource ElectricCyanBrush}"/>
+                </Grid>
+
+                <Grid Margin="0,0,0,12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="成功率"
+                               Foreground="{StaticResource SecondaryTextBrush}"
+                               FontSize="14" VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="1" x:Name="StatSuccessRate"
+                               Text="0%" FontSize="22" FontWeight="Bold"
+                               Foreground="{StaticResource ElectricCyanBrush}"/>
+                </Grid>
+
+            </StackPanel>
+
+            <Button Grid.Row="2" x:Name="BtnClose"
+                    Style="{StaticResource PrimaryButtonStyle}"
+                    Content="关闭"
+                    Width="120"
+                    HorizontalAlignment="Center" Margin="0,12,0,0"
+                    Click="BtnClose_Click"/>
+        </Grid>
+    </Border>
+</Window>

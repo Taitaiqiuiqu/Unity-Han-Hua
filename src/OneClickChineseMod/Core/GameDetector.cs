@@ -22,6 +22,7 @@ public class GameDetector
         gameInfo.Type = DetectGameType(gameInfo.GameRoot, gameInfo.GameName);
         gameInfo.UnityVersion = GetUnityVersion(gameInfo.GameRoot, gameInfo.GameName);
         gameInfo.IsBepInExInstalled = IsBepInExInstalled(gameInfo.GameRoot);
+        DetectSteamGame(gameInfo);
 
         if (gameInfo.IsBepInExInstalled)
         {
@@ -191,7 +192,17 @@ public class GameDetector
         var bepinexCoreDir = Path.Combine(gameRoot, "BepInEx", "core");
         var bepinexPluginsDir = Path.Combine(gameRoot, "BepInEx", "plugins");
 
-        return Directory.Exists(bepinexCoreDir) && Directory.Exists(bepinexPluginsDir);
+        if (!Directory.Exists(bepinexCoreDir) || !Directory.Exists(bepinexPluginsDir))
+            return false;
+
+        // 必须验证注入桥接文件存在，仅目录存在不代表 BepInEx 可以被加载。
+        // winhttp.dll / version.dll — Mono BepInEx 5.x doorstop
+        // doorstop_config.ini     — IL2CPP BepInEx 6.x doorstop
+        var winhttp = Path.Combine(gameRoot, "winhttp.dll");
+        var version = Path.Combine(gameRoot, "version.dll");
+        var doorstop = Path.Combine(gameRoot, "doorstop_config.ini");
+
+        return File.Exists(winhttp) || File.Exists(version) || File.Exists(doorstop);
     }
 
     private string GetInstalledBepInExVersion(string gameRoot)
@@ -228,5 +239,26 @@ public class GameDetector
             return false;
 
         return true;
+    }
+
+    public void DetectSteamGame(GameInfo gameInfo)
+    {
+        var steamDll64 = Path.Combine(gameInfo.GameRoot, "steam_api64.dll");
+        var steamDll32 = Path.Combine(gameInfo.GameRoot, "steam_api.dll");
+
+        if (!File.Exists(steamDll64) && !File.Exists(steamDll32))
+            return;
+
+        gameInfo.IsSteamGame = true;
+
+        var appIdFile = Path.Combine(gameInfo.GameRoot, "steam_appid.txt");
+        if (File.Exists(appIdFile))
+        {
+            try
+            {
+                gameInfo.SteamAppId = File.ReadAllText(appIdFile).Trim();
+            }
+            catch { }
+        }
     }
 }

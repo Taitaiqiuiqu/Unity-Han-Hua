@@ -24,4 +24,6 @@ public class GameInfo
     public string UnityVersion { get; set; } = string.Empty;
     public bool IsBepInExInstalled { get; set; }
     public string InstalledBepInExVersion { get; set; } = string.Empty;
+    public bool IsSteamGame { get; set; }
+    public string SteamAppId { get; set; } = string.Empty;
 }

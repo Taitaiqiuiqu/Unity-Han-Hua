@@ -6,7 +6,7 @@ public class HelpCommand
 {
     public void Execute()
     {
-        Console.WriteLine("OneClickChineseMod - 一键汉化工具");
+        Console.WriteLine($"{AppBasicInfoManager.AppDisplayName} - {AppBasicInfoManager.CliDescription}");
         Console.WriteLine();
         Console.WriteLine("本工具可为 Unity 游戏自动安装 BepInEx + XUnity.AutoTranslator 翻译插件，");
         Console.WriteLine("实现游戏文本的自动汉化。");
@@ -14,7 +14,7 @@ public class HelpCommand
         ConsoleUtils.WriteInfo("=== 快速开始 ===");
         Console.WriteLine("  方式一：直接双击运行程序，在弹出的对话框中选择游戏 .exe 文件");
         Console.WriteLine("  方式二：打开命令行，运行：");
-        Console.WriteLine("    OneClickChineseMod.exe install \"D:\\Games\\MyGame\\Game.exe\"");
+        Console.WriteLine($"    SenGameLoc.exe install \"D:\\Games\\MyGame\\Game.exe\"");
         Console.WriteLine();
         ConsoleUtils.WriteInfo("=== 命令 ===");
         Console.WriteLine("  install <game.exe>  安装翻译插件到指定游戏");

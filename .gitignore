@@ -9,4 +9,6 @@ trantion.pdb
 *.exe
 *.pdb
 docs/
-src/OneClickChineseMod/Resources/Themes/
+.atomcode/
+.config/
+logo.png

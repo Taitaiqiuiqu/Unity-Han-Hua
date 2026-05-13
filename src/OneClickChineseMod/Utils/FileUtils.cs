@@ -1,13 +1,21 @@
+using System.IO;
+
 namespace OneClickChineseMod.Utils;
 
 public static class FileUtils
 {
     public static void SafeExtractZip(Stream zipStream, string targetPath)
     {
+        var resolvedTarget = Path.GetFullPath(targetPath) + Path.DirectorySeparatorChar;
+
         using var archive = new System.IO.Compression.ZipArchive(zipStream);
         foreach (var entry in archive.Entries)
         {
-            var fullPath = Path.Combine(targetPath, entry.FullName);
+            var fullPath = Path.GetFullPath(Path.Combine(targetPath, entry.FullName));
+
+            // 路径穿越检查：entry.FullName 可能包含 ../../ 跳出目标目录。
+            if (!fullPath.StartsWith(resolvedTarget, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException($"Zip 条目路径非法（路径穿越）: {entry.FullName}");
 
             if (string.IsNullOrEmpty(entry.Name))
             {

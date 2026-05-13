@@ -1,3 +1,7 @@
+using System.IO;
+using System.Text;
+using OneClickChineseMod.Core.Providers;
+
 namespace OneClickChineseMod.Utils;
 
 public enum LogLevel
@@ -19,8 +23,22 @@ public class LogEntry
 public static class ConsoleUtils
 {
     private static bool _verbose = false;
+    private static readonly object _errorLock = new();
+    private static readonly string _logDir = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        AppBasicInfoManager.AppEnglishName);
+    private static readonly string _errorLogPath = Path.Combine(_logDir, "error.log");
 
     public static event Action<LogEntry>? OnLog;
+
+    static ConsoleUtils()
+    {
+        try
+        {
+            Directory.CreateDirectory(_logDir);
+        }
+        catch { }
+    }
 
     public static void SetVerbose(bool verbose)
     {
@@ -31,6 +49,24 @@ public static class ConsoleUtils
     {
         var entry = new LogEntry { Level = level, Message = message };
         OnLog?.Invoke(entry);
+
+        if (level == LogLevel.Error)
+        {
+            WriteErrorToFile(message);
+        }
+    }
+
+    private static void WriteErrorToFile(string message)
+    {
+        try
+        {
+            var logLine = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] [ERROR] {message}{Environment.NewLine}";
+            lock (_errorLock)
+            {
+                File.AppendAllText(_errorLogPath, logLine, Encoding.UTF8);
+            }
+        }
+        catch { }
     }
 
     public static void WriteInfo(string message)
